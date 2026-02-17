@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Gemini Windows App (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Gemini Windows App (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
