@@ -28,67 +28,70 @@ using Windows.Foundation.Collections;
 
 using Microsoft.Extensions.AI;
 
+using DotNetEnv;
 
 
 namespace Gemini_Windows_App
-
 {
-
-    /// <summary>
-
-    /// An empty window that can be used on its own or navigated to within a Frame.
-
-    /// </summary>
-
     public sealed partial class MainWindow : Window
-
     {
-
-        private readonly string _apiKey = "AIzaSyDooQg_rx0ju9O6RqvGCPZdxZa-FfZgUmc";
+        private string _apiKey; // On ne l'initialise pas ici !
 
         public MainWindow()
-
         {
+            // 1. Charger le .env AVANT toute chose
+            Env.Load();
+            _apiKey = Env.GetString("GEMINI_API_KEY");
 
-            InitializeComponent();
-            // Lecture du Keydown Enter
+            this.InitializeComponent();
+            
             UserInput.KeyDown += UserInput_KeyDown;
-
         }
+
         private void UserInput_KeyDown(object sender, KeyRoutedEventArgs e)
         {
             if (e.Key == Windows.System.VirtualKey.Enter)
             {
-                // Empêche le retour à la ligne si on n'appuie pas sur Shift
-                var shiftLabel = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift);
-                if (shiftLabel == Windows.UI.Core.CoreVirtualKeyStates.None)
+                // Vérification simple du Shift dans WinUI 3
+                var shiftState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift);
+                if ((shiftState & Windows.UI.Core.CoreVirtualKeyStates.Down) != Windows.UI.Core.CoreVirtualKeyStates.Down)
                 {
                     e.Handled = true;
                     myButton_Click(this, new RoutedEventArgs());
                 }
             }
         }
+
         private async void myButton_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrWhiteSpace(UserInput.Text)) return;
+            if (string.IsNullOrEmpty(_apiKey)) {
+                ResponseText.Text = "Erreur : Clé API manquante dans le .env";
+                return;
+            }
 
-            // 1. Préparation de l'UI
             myButton.IsEnabled = false;
             LoadingBar.Visibility = Visibility.Visible;
-            ResponseText.Text = "Gemini réfléchit..."; // On laisse ce texte !
+            ResponseText.Text = "Gemini réfléchit...";
 
             try
             {
+                // Utilise le bon modèle (2.0-flash est stable)
                 var client = new Client(apiKey: _apiKey);
-                var model = "gemini-2.5-flash";
+                var model = "gemini-2.0-flash"; 
 
                 var response = await client.Models.GenerateContentAsync(model, UserInput.Text);
 
-                // 2. On remplace le message de chargement par la vraie réponse
-                ResponseText.Text = response.Candidates[0].Content.Parts[0].Text;
-
-                // On vide l'INPUT, pas la réponse !
-                UserInput.Text = string.Empty;
+                // Sécurité : Vérifier si on a une réponse
+                if (response?.Candidates != null && response.Candidates.Count > 0)
+                {
+                    ResponseText.Text = response.Candidates[0].Content.Parts[0].Text;
+                    UserInput.Text = string.Empty;
+                }
+                else
+                {
+                    ResponseText.Text = "Gemini n'a pas pu générer de réponse.";
+                }
             }
             catch (Exception ex)
             {
@@ -100,6 +103,7 @@ namespace Gemini_Windows_App
                 LoadingBar.Visibility = Visibility.Collapsed;
             }
         }
+
         private void CopyButton_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrEmpty(ResponseText.Text)) return;
@@ -107,10 +111,7 @@ namespace Gemini_Windows_App
             var dataPackage = new Windows.ApplicationModel.DataTransfer.DataPackage();
             dataPackage.SetText(ResponseText.Text);
             Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dataPackage);
-            ResponseText.Text = "Texte copié dans le presse-papier !";
+            // On évite d'écraser le texte par "Copié !", on pourrait utiliser un Flyout ou changer la couleur
         }
-
-
     }
-
 }
